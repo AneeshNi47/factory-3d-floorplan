@@ -31,11 +31,17 @@
 
   .hud-top {
     position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-    background: linear-gradient(180deg, rgba(10,15,26,0.95) 0%, rgba(10,15,26,0.7) 80%, transparent 100%);
-    padding: 16px 24px 32px; pointer-events: none;
+    background: rgba(10,15,26,0.8);
+    padding: 8px 20px; pointer-events: none;
+    display: flex; align-items: center; gap: 12px;
+    transition: opacity 0.5s ease, transform 0.5s ease;
   }
-  .hud-title { font-family: 'Space Mono', monospace; font-size: 16px; color: #64b5f6; letter-spacing: 3px; text-transform: uppercase; }
-  .hud-subtitle { font-size: 12px; color: #5a6d85; margin-top: 4px; font-family: 'Space Mono', monospace; }
+  .hud-top.collapsed {
+    opacity: 0.3; transform: translateY(-50%);
+  }
+  .hud-top:hover { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .hud-title { font-family: 'Space Mono', monospace; font-size: 13px; color: #64b5f6; letter-spacing: 2px; text-transform: uppercase; white-space: nowrap; }
+  .hud-subtitle { font-size: 10px; color: #5a6d85; font-family: 'Space Mono', monospace; white-space: nowrap; }
 
   .controls-panel {
     position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -108,8 +114,9 @@
     }
     .machine-legend h4, .legend-panel h4 { font-size: 8px; }
     .ml-text, .legend-text { font-size: 8px; }
-    .hud-title { font-size: 12px; letter-spacing: 1px; }
-    .hud-subtitle { font-size: 10px; }
+    .hud-top { flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 12px; }
+    .hud-title { font-size: 10px; letter-spacing: 1px; }
+    .hud-subtitle { font-size: 8px; }
     .ctrl-btn { padding: 6px 10px; font-size: 9px; }
     .controls-panel { bottom: 10px; gap: 4px; }
     .hint { font-size: 9px; bottom: 56px; }
@@ -937,6 +944,7 @@ function animate() {
     const overlay = document.getElementById('loadingOverlay');
     overlay.classList.add('fade-out');
     setTimeout(() => overlay.remove(), 600);
+    setTimeout(() => document.querySelector('.hud-top').classList.add('collapsed'), 4000);
   }
 
   if (touring) {
