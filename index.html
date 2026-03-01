@@ -143,6 +143,7 @@
   <button class="ctrl-btn" onclick="toggleLabels()">LABELS</button>
   <button class="ctrl-btn" onclick="toggleRoof()">ROOF</button>
   <button class="ctrl-btn" onclick="toggleFloor()">FLOORS</button>
+  <button class="ctrl-btn" onclick="togglePanels()">PANELS</button>
   <button class="ctrl-btn" onclick="animateTour()">TOUR</button>
 </div>
 
@@ -914,6 +915,16 @@ function setCameraView(v, e) {
 function toggleLabels() { showLabelsFlag = !showLabelsFlag; labelSprites.forEach(s => s.visible = showLabelsFlag); }
 function toggleRoof() { roofVisible = !roofVisible; roofMeshes.forEach(r => r.visible = roofVisible); }
 function toggleFloor() { floorVisible = !floorVisible; floorMeshes.forEach(f => f.visible = floorVisible); }
+
+let panelsVisible = true;
+function togglePanels() {
+  panelsVisible = !panelsVisible;
+  const display = panelsVisible ? '' : 'none';
+  document.querySelector('.hud-top').style.display = display;
+  document.querySelector('.machine-legend').style.display = display;
+  document.querySelector('.legend-panel').style.display = display;
+  closeInfo();
+}
 
 // ═══════════ TOUR ═══════════
 let touring = false, tourProg = 0;
