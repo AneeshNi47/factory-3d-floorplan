@@ -10,6 +10,25 @@
   body { background: #0a0f1a; overflow: hidden; font-family: 'DM Sans', sans-serif; }
   #canvas-container { width: 100vw; height: 100vh; }
 
+  /* Loading screen */
+  .loading-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: #0a0f1a; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    transition: opacity 0.6s ease;
+  }
+  .loading-overlay.fade-out { opacity: 0; pointer-events: none; }
+  .loading-spinner {
+    width: 40px; height: 40px; border: 3px solid #1e3a5f;
+    border-top-color: #64b5f6; border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .loading-text {
+    font-family: 'Space Mono', monospace; font-size: 12px;
+    color: #5a6d85; margin-top: 16px; letter-spacing: 2px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   .hud-top {
     position: fixed; top: 0; left: 0; right: 0; z-index: 100;
     background: linear-gradient(180deg, rgba(10,15,26,0.95) 0%, rgba(10,15,26,0.7) 80%, transparent 100%);
@@ -76,9 +95,33 @@
   .ml-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
   .ml-shape { width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; }
   .ml-text { font-size: 9px; color: #5a6d85; }
+
+  /* Responsive: mobile */
+  @media (max-width: 768px) {
+    .info-panel {
+      right: 0; left: 0; top: auto; bottom: 0;
+      width: 100%; max-height: 50vh;
+      border-radius: 10px 10px 0 0;
+    }
+    .machine-legend, .legend-panel {
+      padding: 6px 10px; max-width: 140px;
+    }
+    .machine-legend h4, .legend-panel h4 { font-size: 8px; }
+    .ml-text, .legend-text { font-size: 8px; }
+    .hud-title { font-size: 12px; letter-spacing: 1px; }
+    .hud-subtitle { font-size: 10px; }
+    .ctrl-btn { padding: 6px 10px; font-size: 9px; }
+    .controls-panel { bottom: 10px; gap: 4px; }
+    .hint { font-size: 9px; bottom: 56px; }
+  }
 </style>
 </head>
 <body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">LOADING FACTORY</div>
+</div>
 
 <div class="hud-top">
   <div class="hud-title">3D Factory — Machine Level Detail</div>
@@ -86,17 +129,17 @@
 </div>
 
 <div class="controls-panel">
-  <button class="ctrl-btn" onclick="setCameraView('perspective')">PERSPECTIVE</button>
-  <button class="ctrl-btn" onclick="setCameraView('top')">TOP</button>
-  <button class="ctrl-btn" onclick="setCameraView('front')">FRONT</button>
-  <button class="ctrl-btn" onclick="setCameraView('side')">SIDE</button>
+  <button class="ctrl-btn" onclick="setCameraView('perspective', event)">PERSPECTIVE</button>
+  <button class="ctrl-btn" onclick="setCameraView('top', event)">TOP</button>
+  <button class="ctrl-btn" onclick="setCameraView('front', event)">FRONT</button>
+  <button class="ctrl-btn" onclick="setCameraView('side', event)">SIDE</button>
   <button class="ctrl-btn" onclick="toggleLabels()">LABELS</button>
   <button class="ctrl-btn" onclick="toggleRoof()">ROOF</button>
   <button class="ctrl-btn" onclick="toggleFloor()">FLOORS</button>
-  <button class="ctrl-btn" onclick="animateTour()">🎬 TOUR</button>
+  <button class="ctrl-btn" onclick="animateTour()">TOUR</button>
 </div>
 
-<div class="hint">🖱 DRAG rotate • SCROLL zoom • CLICK zone/machine for details</div>
+<div class="hint">DRAG rotate • SCROLL zoom • CLICK zone/machine for details • ARROW KEYS navigate</div>
 
 <div class="info-panel" id="infoPanel">
   <span class="info-close" onclick="closeInfo()">✕</span>
@@ -139,10 +182,10 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0f1a);
 scene.fog = new THREE.FogExp2(0x0a0f1a, 0.0025);
 
-const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 container.appendChild(renderer.domElement);
@@ -151,280 +194,252 @@ container.appendChild(renderer.domElement);
 scene.add(new THREE.AmbientLight(0x1a2a4a, 0.5));
 const dir = new THREE.DirectionalLight(0xffffff, 0.9);
 dir.position.set(50, 70, 40); dir.castShadow = true;
-dir.shadow.mapSize.set(2048,2048);
-dir.shadow.camera.near=1; dir.shadow.camera.far=200;
-dir.shadow.camera.left=-80; dir.shadow.camera.right=80;
-dir.shadow.camera.top=80; dir.shadow.camera.bottom=-80;
+dir.shadow.mapSize.set(2048, 2048);
+dir.shadow.camera.near = 1; dir.shadow.camera.far = 200;
+dir.shadow.camera.left = -80; dir.shadow.camera.right = 80;
+dir.shadow.camera.top = 80; dir.shadow.camera.bottom = -80;
 scene.add(dir);
 scene.add(new THREE.DirectionalLight(0x4488cc, 0.3).translateZ(-30).translateY(30));
-const pt = new THREE.PointLight(0x64b5f6, 0.3, 120); pt.position.set(0,20,0); scene.add(pt);
+const pt = new THREE.PointLight(0x64b5f6, 0.3, 120); pt.position.set(0, 20, 0); scene.add(pt);
+
+// ═══════════ SHARED MATERIALS & GEOMETRIES ═══════════
+const MAT = {
+  metal: new THREE.MeshStandardMaterial({ color: 0x90a4ae, metalness: 0.8, roughness: 0.2 }),
+  darkMetal: new THREE.MeshStandardMaterial({ color: 0x37474f, roughness: 0.5, metalness: 0.4 }),
+  legs: new THREE.MeshStandardMaterial({ color: 0x455a64 }),
+  darkBody: new THREE.MeshStandardMaterial({ color: 0x263238, roughness: 0.4, metalness: 0.3 }),
+  belt: new THREE.MeshStandardMaterial({ color: 0x263238, roughness: 0.8 }),
+  controlPanel: new THREE.MeshStandardMaterial({ color: 0x263238 }),
+  screen: new THREE.MeshBasicMaterial({ color: 0x64b5f6 }),
+  vent: new THREE.MeshStandardMaterial({ color: 0x546e7a }),
+  cable: new THREE.MeshStandardMaterial({ color: 0x90a4ae }),
+  _cache: {},
+  get(color, opts) {
+    const key = color + '_' + JSON.stringify(opts || {});
+    if (!this._cache[key]) {
+      this._cache[key] = new THREE.MeshStandardMaterial({ color, ...opts });
+    }
+    return this._cache[key];
+  }
+};
+
+const GEO = {
+  roller: new THREE.CylinderGeometry(0.2, 0.2, 1, 8),
+  legCyl: new THREE.CylinderGeometry(0.04, 0.04, 0.55, 6),
+  tableLeg: new THREE.CylinderGeometry(0.04, 0.04, 0.4, 6),
+  smallRoller: new THREE.CylinderGeometry(0.06, 0.06, 1, 6),
+  _cache: {},
+  box(w, h, d) {
+    const key = `box_${w}_${h}_${d}`;
+    if (!this._cache[key]) this._cache[key] = new THREE.BoxGeometry(w, h, d);
+    return this._cache[key];
+  },
+  cylinder(rt, rb, h, seg) {
+    const key = `cyl_${rt}_${rb}_${h}_${seg}`;
+    if (!this._cache[key]) this._cache[key] = new THREE.CylinderGeometry(rt, rb, h, seg || 8);
+    return this._cache[key];
+  },
+  plane(w, h) {
+    const key = `plane_${w}_${h}`;
+    if (!this._cache[key]) this._cache[key] = new THREE.PlaneGeometry(w, h);
+    return this._cache[key];
+  }
+};
 
 // ═══════════ GROUND + GRID ═══════════
-const gnd = new THREE.Mesh(new THREE.PlaneGeometry(140,100), new THREE.MeshStandardMaterial({color:0x0d1525, roughness:0.9}));
-gnd.rotation.x=-Math.PI/2; gnd.position.y=-0.05; gnd.receiveShadow=true; scene.add(gnd);
-const grid = new THREE.GridHelper(140,70,0x1a2840,0x111b2e); grid.position.y=0.01; scene.add(grid);
+const gnd = new THREE.Mesh(GEO.plane(140, 100), new THREE.MeshStandardMaterial({ color: 0x0d1525, roughness: 0.9 }));
+gnd.rotation.x = -Math.PI / 2; gnd.position.y = -0.05; gnd.receiveShadow = true; scene.add(gnd);
+const grid = new THREE.GridHelper(140, 70, 0x1a2840, 0x111b2e); grid.position.y = 0.01; scene.add(grid);
 
 // ═══════════ COORDINATE SYSTEM ═══════════
 const S = 0.065, OX = -31, OZ = -22;
-function tx(x){ return x*S+OX; }
-function tz(z){ return z*S+OZ; }
-function tw(w){ return w*S; }
+function tx(x) { return x * S + OX; }
+function tz(z) { return z * S + OZ; }
+function tw(w) { return w * S; }
 
 // ═══════════ MACHINE TYPES ═══════════
-// Each returns a THREE.Group
 const MCH = {
-  // Long roll forming line
   rollLine(len, w, color) {
     const g = new THREE.Group();
     const body = new THREE.Mesh(
-      new THREE.BoxGeometry(len, 0.8, w),
-      new THREE.MeshStandardMaterial({color, roughness:0.3, metalness:0.6})
-    ); body.position.y=0.5; body.castShadow=true; g.add(body);
-    // Rollers
-    for(let i=-len/2+0.3; i<len/2; i+=0.8){
-      const r = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,w+0.2,8),
-        new THREE.MeshStandardMaterial({color:0x90a4ae, metalness:0.8, roughness:0.2}));
-      r.position.set(i,0.95,0); r.rotation.x=Math.PI/2; g.add(r);
+      GEO.box(len, 0.8, w),
+      MAT.get(color, { roughness: 0.3, metalness: 0.6 })
+    ); body.position.y = 0.5; body.castShadow = true; g.add(body);
+    for (let i = -len / 2 + 0.3; i < len / 2; i += 0.8) {
+      const r = new THREE.Mesh(GEO.cylinder(0.2, 0.2, w + 0.2, 8), MAT.metal);
+      r.position.set(i, 0.95, 0); r.rotation.x = Math.PI / 2; g.add(r);
     }
     return g;
   },
-  // Press / Punch machine
   press(w, d, h, color) {
     const g = new THREE.Group();
-    // Base
-    const base = new THREE.Mesh(new THREE.BoxGeometry(w,0.4,d),
-      new THREE.MeshStandardMaterial({color:0x37474f, roughness:0.5, metalness:0.4}));
-    base.position.y=0.2; base.castShadow=true; g.add(base);
-    // Frame
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(w*0.9,h,0.3),
-      new THREE.MeshStandardMaterial({color, roughness:0.3, metalness:0.5}));
-    frame.position.set(0,h/2+0.4,-d/2+0.2); frame.castShadow=true; g.add(frame);
-    // Ram
-    const ram = new THREE.Mesh(new THREE.BoxGeometry(w*0.6,0.5,d*0.6),
-      new THREE.MeshStandardMaterial({color:0x90a4ae, metalness:0.7, roughness:0.2}));
-    ram.position.set(0,h*0.5,0); g.add(ram);
+    const base = new THREE.Mesh(GEO.box(w, 0.4, d), MAT.darkMetal);
+    base.position.y = 0.2; base.castShadow = true; g.add(base);
+    const frame = new THREE.Mesh(GEO.box(w * 0.9, h, 0.3), MAT.get(color, { roughness: 0.3, metalness: 0.5 }));
+    frame.position.set(0, h / 2 + 0.4, -d / 2 + 0.2); frame.castShadow = true; g.add(frame);
+    const ram = new THREE.Mesh(GEO.box(w * 0.6, 0.5, d * 0.6), MAT.get(0x90a4ae, { metalness: 0.7, roughness: 0.2 }));
+    ram.position.set(0, h * 0.5, 0); g.add(ram);
     return g;
   },
-  // Lathe / Cylindrical machine
   lathe(len, radius, color) {
     const g = new THREE.Group();
-    const bed = new THREE.Mesh(new THREE.BoxGeometry(len,0.3,radius*2.5),
-      new THREE.MeshStandardMaterial({color:0x37474f, roughness:0.5, metalness:0.4}));
-    bed.position.y=0.4; bed.castShadow=true; g.add(bed);
-    const chuck = new THREE.Mesh(new THREE.CylinderGeometry(radius,radius,0.4,12),
-      new THREE.MeshStandardMaterial({color, metalness:0.7, roughness:0.2}));
-    chuck.position.set(-len/2+0.3,0.8,0); chuck.rotation.z=Math.PI/2; g.add(chuck);
-    const spindle = new THREE.Mesh(new THREE.CylinderGeometry(radius*0.3,radius*0.3,len*0.7,8),
-      new THREE.MeshStandardMaterial({color:0x90a4ae, metalness:0.8}));
-    spindle.position.set(0,0.8,0); spindle.rotation.z=Math.PI/2; g.add(spindle);
+    const bed = new THREE.Mesh(GEO.box(len, 0.3, radius * 2.5), MAT.darkMetal);
+    bed.position.y = 0.4; bed.castShadow = true; g.add(bed);
+    const chuck = new THREE.Mesh(GEO.cylinder(radius, radius, 0.4, 12), MAT.get(color, { metalness: 0.7, roughness: 0.2 }));
+    chuck.position.set(-len / 2 + 0.3, 0.8, 0); chuck.rotation.z = Math.PI / 2; g.add(chuck);
+    const spindle = new THREE.Mesh(GEO.cylinder(radius * 0.3, radius * 0.3, len * 0.7, 8), MAT.metal);
+    spindle.position.set(0, 0.8, 0); spindle.rotation.z = Math.PI / 2; g.add(spindle);
     return g;
   },
-  // Laser cutter - flat table + gantry
   laser(w, d, color) {
     const g = new THREE.Group();
-    const table = new THREE.Mesh(new THREE.BoxGeometry(w,0.15,d),
-      new THREE.MeshStandardMaterial({color:0x263238, roughness:0.4, metalness:0.3}));
-    table.position.y=0.6; table.castShadow=true; g.add(table);
-    // Legs
-    [[-w/2+0.15,0,-d/2+0.15],[w/2-0.15,0,-d/2+0.15],[-w/2+0.15,0,d/2-0.15],[w/2-0.15,0,d/2-0.15]].forEach(p=>{
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.5,0.15),
-        new THREE.MeshStandardMaterial({color:0x455a64}));
-      leg.position.set(p[0],0.3,p[2]); g.add(leg);
+    const table = new THREE.Mesh(GEO.box(w, 0.15, d), MAT.darkBody);
+    table.position.y = 0.6; table.castShadow = true; g.add(table);
+    [[-w / 2 + 0.15, 0, -d / 2 + 0.15], [w / 2 - 0.15, 0, -d / 2 + 0.15], [-w / 2 + 0.15, 0, d / 2 - 0.15], [w / 2 - 0.15, 0, d / 2 - 0.15]].forEach(p => {
+      const leg = new THREE.Mesh(GEO.box(0.15, 0.5, 0.15), MAT.legs);
+      leg.position.set(p[0], 0.3, p[2]); g.add(leg);
     });
-    // Gantry rails
-    const rail1 = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.3,d),
-      new THREE.MeshStandardMaterial({color:0x90a4ae, metalness:0.7}));
-    rail1.position.set(-w/2+0.2,0.85,0); g.add(rail1);
-    const rail2 = rail1.clone(); rail2.position.x=w/2-0.2; g.add(rail2);
-    // Gantry beam
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(w-0.3,0.15,0.15),
-      new THREE.MeshStandardMaterial({color, metalness:0.6, roughness:0.2}));
-    beam.position.set(0,0.95,0); g.add(beam);
-    // Laser head
-    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.05,0.25,6),
-      new THREE.MeshStandardMaterial({color:0xef5350, emissive:0xef5350, emissiveIntensity:0.5}));
-    head.position.set(0,0.75,0); g.add(head);
+    const rail1 = new THREE.Mesh(GEO.box(0.1, 0.3, d), MAT.get(0x90a4ae, { metalness: 0.7 }));
+    rail1.position.set(-w / 2 + 0.2, 0.85, 0); g.add(rail1);
+    const rail2 = rail1.clone(); rail2.position.x = w / 2 - 0.2; g.add(rail2);
+    const beam = new THREE.Mesh(GEO.box(w - 0.3, 0.15, 0.15), MAT.get(color, { metalness: 0.6, roughness: 0.2 }));
+    beam.position.set(0, 0.95, 0); g.add(beam);
+    const head = new THREE.Mesh(GEO.cylinder(0.08, 0.05, 0.25, 6),
+      new THREE.MeshStandardMaterial({ color: 0xef5350, emissive: 0xef5350, emissiveIntensity: 0.5 }));
+    head.position.set(0, 0.75, 0); g.add(head);
     return g;
   },
-  // CNC VMC / Mill
   cnc(w, d, h, color) {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
-      new THREE.MeshStandardMaterial({color, roughness:0.3, metalness:0.4}));
-    body.position.y=h/2; body.castShadow=true; g.add(body);
-    // Control panel
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.3,h*0.6,d*0.4),
-      new THREE.MeshStandardMaterial({color:0x263238}));
-    panel.position.set(w/2+0.15,h*0.45,0); g.add(panel);
-    // Screen
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.01,h*0.25,d*0.25),
-      new THREE.MeshBasicMaterial({color:0x64b5f6, emissive:0x64b5f6}));
-    screen.position.set(w/2+0.32,h*0.55,0); screen.rotation.y=Math.PI/2; g.add(screen);
+    const body = new THREE.Mesh(GEO.box(w, h, d), MAT.get(color, { roughness: 0.3, metalness: 0.4 }));
+    body.position.y = h / 2; body.castShadow = true; g.add(body);
+    const panel = new THREE.Mesh(GEO.box(0.3, h * 0.6, d * 0.4), MAT.controlPanel);
+    panel.position.set(w / 2 + 0.15, h * 0.45, 0); g.add(panel);
+    const screen = new THREE.Mesh(GEO.plane(0.01, h * 0.25), MAT.screen);
+    screen.position.set(w / 2 + 0.32, h * 0.55, 0); screen.rotation.y = Math.PI / 2; g.add(screen);
     return g;
   },
-  // Tank / booth (for surface treatment, plating)
   tank(w, d, h, color) {
     const g = new THREE.Group();
-    // Open-top tank
-    const walls = [
-      [w,h,0.1, 0,h/2,-d/2], [w,h,0.1, 0,h/2,d/2],
-      [0.1,h,d, -w/2,h/2,0], [0.1,h,d, w/2,h/2,0],
-      [w,0.1,d, 0,0.05,0] // bottom
-    ];
-    walls.forEach(([bw,bh,bd,px,py,pz])=>{
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),
-        new THREE.MeshStandardMaterial({color, transparent:true, opacity:0.7, roughness:0.4, metalness:0.3}));
-      wall.position.set(px,py,pz); wall.castShadow=true; g.add(wall);
+    const tankMat = MAT.get(color, { transparent: true, opacity: 0.7, roughness: 0.4, metalness: 0.3 });
+    [[w, h, 0.1, 0, h / 2, -d / 2], [w, h, 0.1, 0, h / 2, d / 2],
+     [0.1, h, d, -w / 2, h / 2, 0], [0.1, h, d, w / 2, h / 2, 0],
+     [w, 0.1, d, 0, 0.05, 0]].forEach(([bw, bh, bd, px, py, pz]) => {
+      const wall = new THREE.Mesh(GEO.box(bw, bh, bd), tankMat);
+      wall.position.set(px, py, pz); g.add(wall);
     });
-    // Liquid inside
-    const liq = new THREE.Mesh(new THREE.BoxGeometry(w-0.2,h*0.6,d-0.2),
-      new THREE.MeshStandardMaterial({color:0x4dd0e1, transparent:true, opacity:0.3}));
-    liq.position.y=h*0.3; g.add(liq);
+    const liq = new THREE.Mesh(GEO.box(w - 0.2, h * 0.6, d - 0.2),
+      new THREE.MeshStandardMaterial({ color: 0x4dd0e1, transparent: true, opacity: 0.3 }));
+    liq.position.y = h * 0.3; g.add(liq);
     return g;
   },
-  // Assembly table / workbench
   table(w, d, color) {
     const g = new THREE.Group();
-    const top = new THREE.Mesh(new THREE.BoxGeometry(w,0.08,d),
-      new THREE.MeshStandardMaterial({color, roughness:0.5}));
-    top.position.y=0.6; top.castShadow=true; g.add(top);
-    [[-w/2+0.1,0,-d/2+0.1],[w/2-0.1,0,-d/2+0.1],[-w/2+0.1,0,d/2-0.1],[w/2-0.1,0,d/2-0.1]].forEach(p=>{
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.55,6),
-        new THREE.MeshStandardMaterial({color:0x455a64}));
-      leg.position.set(p[0],0.3,p[2]); g.add(leg);
+    const top = new THREE.Mesh(GEO.box(w, 0.08, d), MAT.get(color, { roughness: 0.5 }));
+    top.position.y = 0.6; top.castShadow = true; g.add(top);
+    [[-w / 2 + 0.1, 0, -d / 2 + 0.1], [w / 2 - 0.1, 0, -d / 2 + 0.1], [-w / 2 + 0.1, 0, d / 2 - 0.1], [w / 2 - 0.1, 0, d / 2 - 0.1]].forEach(p => {
+      const leg = new THREE.Mesh(GEO.legCyl, MAT.legs);
+      leg.position.set(p[0], 0.3, p[2]); g.add(leg);
     });
     return g;
   },
-  // Decoiler
   decoiler(color) {
     const g = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.3,0.8),
-      new THREE.MeshStandardMaterial({color:0x37474f}));
-    base.position.y=0.15; g.add(base);
-    const coil = new THREE.Mesh(new THREE.TorusGeometry(0.4,0.15,8,16),
-      new THREE.MeshStandardMaterial({color, metalness:0.7, roughness:0.3}));
-    coil.position.y=0.7; g.add(coil);
-    const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.5,6),
-      new THREE.MeshStandardMaterial({color:0x90a4ae}));
-    axle.position.y=0.7; g.add(axle);
+    const base = new THREE.Mesh(GEO.box(0.8, 0.3, 0.8), MAT.darkMetal);
+    base.position.y = 0.15; g.add(base);
+    const coil = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.15, 8, 16),
+      MAT.get(color, { metalness: 0.7, roughness: 0.3 }));
+    coil.position.y = 0.7; g.add(coil);
+    const axle = new THREE.Mesh(GEO.cylinder(0.05, 0.05, 0.5, 6), MAT.metal);
+    axle.position.y = 0.7; g.add(axle);
     return g;
   },
-  // Conveyor
   conveyor(len, w, color) {
     const g = new THREE.Group();
-    const belt = new THREE.Mesh(new THREE.BoxGeometry(len,0.05,w),
-      new THREE.MeshStandardMaterial({color:0x263238, roughness:0.8}));
-    belt.position.y=0.45; g.add(belt);
-    // Side rails
-    [-w/2, w/2].forEach(z=>{
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(len,0.15,0.05),
-        new THREE.MeshStandardMaterial({color}));
-      rail.position.set(0,0.5,z); g.add(rail);
+    const belt = new THREE.Mesh(GEO.box(len, 0.05, w), MAT.belt);
+    belt.position.y = 0.45; g.add(belt);
+    [-w / 2, w / 2].forEach(z => {
+      const rail = new THREE.Mesh(GEO.box(len, 0.15, 0.05), MAT.get(color));
+      rail.position.set(0, 0.5, z); g.add(rail);
     });
-    // Rollers
-    for(let i=-len/2+0.3;i<len/2;i+=0.6){
-      const r = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,w,6),
-        new THREE.MeshStandardMaterial({color:0x90a4ae, metalness:0.6}));
-      r.position.set(i,0.42,0); r.rotation.x=Math.PI/2; g.add(r);
+    for (let i = -len / 2 + 0.3; i < len / 2; i += 0.6) {
+      const r = new THREE.Mesh(GEO.cylinder(0.06, 0.06, w, 6), MAT.get(0x90a4ae, { metalness: 0.6 }));
+      r.position.set(i, 0.42, 0); r.rotation.x = Math.PI / 2; g.add(r);
     }
-    // Legs
-    for(let i=-len/2+0.2;i<=len/2;i+=len-0.4){
-      [-w/2+0.1,w/2-0.1].forEach(z=>{
-        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.4,6),
-          new THREE.MeshStandardMaterial({color:0x455a64}));
-        leg.position.set(i,0.2,z); g.add(leg);
+    for (let i = -len / 2 + 0.2; i <= len / 2; i += len - 0.4) {
+      [-w / 2 + 0.1, w / 2 - 0.1].forEach(z => {
+        const leg = new THREE.Mesh(GEO.tableLeg, MAT.legs);
+        leg.position.set(i, 0.2, z); g.add(leg);
       });
     }
     return g;
   },
-  // Overhead crane
   crane(span, color) {
     const g = new THREE.Group();
-    // Rails
-    [-span/2, span/2].forEach(z=>{
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(span*1.5,0.1,0.15),
-        new THREE.MeshStandardMaterial({color:0xffa000, metalness:0.5}));
-      rail.position.set(0,4.5,z); g.add(rail);
+    [-span / 2, span / 2].forEach(z => {
+      const rail = new THREE.Mesh(GEO.box(span * 1.5, 0.1, 0.15),
+        MAT.get(0xffa000, { metalness: 0.5 }));
+      rail.position.set(0, 4.5, z); g.add(rail);
     });
-    // Bridge beam
-    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,span),
-      new THREE.MeshStandardMaterial({color, metalness:0.6}));
-    bridge.position.y=4.5; g.add(bridge);
-    // Hoist
-    const hoist = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.3),
-      new THREE.MeshStandardMaterial({color:0xef5350}));
-    hoist.position.y=4.3; g.add(hoist);
-    // Cable
-    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.015,1.5,4),
-      new THREE.MeshStandardMaterial({color:0x90a4ae}));
-    cable.position.y=3.5; g.add(cable);
-    // Hook
-    const hook = new THREE.Mesh(new THREE.TorusGeometry(0.08,0.02,6,8,Math.PI),
-      new THREE.MeshStandardMaterial({color:0xffa000}));
-    hook.position.y=2.75; g.add(hook);
+    const bridge = new THREE.Mesh(GEO.box(0.2, 0.2, span), MAT.get(color, { metalness: 0.6 }));
+    bridge.position.y = 4.5; g.add(bridge);
+    const hoist = new THREE.Mesh(GEO.box(0.3, 0.3, 0.3),
+      new THREE.MeshStandardMaterial({ color: 0xef5350 }));
+    hoist.position.y = 4.3; g.add(hoist);
+    const cable = new THREE.Mesh(GEO.cylinder(0.015, 0.015, 1.5, 4), MAT.cable);
+    cable.position.y = 3.5; g.add(cable);
+    const hook = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.02, 6, 8, Math.PI),
+      MAT.get(0xffa000));
+    hook.position.y = 2.75; g.add(hook);
     return g;
   },
-  // Welding station
   welder(color) {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.8,0.4),
-      new THREE.MeshStandardMaterial({color, roughness:0.4, metalness:0.3}));
-    body.position.y=0.4; body.castShadow=true; g.add(body);
-    // Torch arm
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,1.0,6),
-      new THREE.MeshStandardMaterial({color:0x90a4ae}));
-    arm.position.set(0,0.9,0.2); arm.rotation.x=0.4; g.add(arm);
-    // Tip glow
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.05,6,6),
-      new THREE.MeshBasicMaterial({color:0x64b5f6}));
-    tip.position.set(0,1.3,0.55); g.add(tip);
+    const body = new THREE.Mesh(GEO.box(0.5, 0.8, 0.4), MAT.get(color, { roughness: 0.4, metalness: 0.3 }));
+    body.position.y = 0.4; body.castShadow = true; g.add(body);
+    const arm = new THREE.Mesh(GEO.cylinder(0.03, 0.03, 1.0, 6), MAT.metal);
+    arm.position.set(0, 0.9, 0.2); arm.rotation.x = 0.4; g.add(arm);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6),
+      new THREE.MeshBasicMaterial({ color: 0x64b5f6 }));
+    tip.position.set(0, 1.3, 0.55); g.add(tip);
     return g;
   },
-  // Forklift
   forklift() {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.5,0.5),
-      new THREE.MeshStandardMaterial({color:0xffa000, roughness:0.4}));
-    body.position.y=0.35; g.add(body);
-    const mast = new THREE.Mesh(new THREE.BoxGeometry(0.08,1.0,0.4),
-      new THREE.MeshStandardMaterial({color:0x455a64}));
-    mast.position.set(0.5,0.6,0); g.add(mast);
-    const fork = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.04,0.08),
-      new THREE.MeshStandardMaterial({color:0x90a4ae}));
-    fork.position.set(0.7,0.15,-0.12); g.add(fork);
-    const fork2 = fork.clone(); fork2.position.z=0.12; g.add(fork2);
+    const body = new THREE.Mesh(GEO.box(0.8, 0.5, 0.5),
+      MAT.get(0xffa000, { roughness: 0.4 }));
+    body.position.y = 0.35; g.add(body);
+    const mast = new THREE.Mesh(GEO.box(0.08, 1.0, 0.4), MAT.legs);
+    mast.position.set(0.5, 0.6, 0); g.add(mast);
+    const fork = new THREE.Mesh(GEO.box(0.6, 0.04, 0.08), MAT.metal);
+    fork.position.set(0.7, 0.15, -0.12); g.add(fork);
+    const fork2 = fork.clone(); fork2.position.z = 0.12; g.add(fork2);
     return g;
   },
-  // Spray booth
   booth(w, d, h, color) {
     const g = new THREE.Group();
-    // Frame
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
-      new THREE.MeshStandardMaterial({color, transparent:true, opacity:0.25, roughness:0.5}));
-    frame.position.y=h/2; g.add(frame);
+    const frame = new THREE.Mesh(GEO.box(w, h, d),
+      MAT.get(color, { transparent: true, opacity: 0.25, roughness: 0.5 }));
+    frame.position.y = h / 2; g.add(frame);
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(frame.geometry),
-      new THREE.LineBasicMaterial({color, transparent:true, opacity:0.6}));
+      new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6 }));
     edges.position.copy(frame.position); g.add(edges);
-    // Vent on top
-    const vent = new THREE.Mesh(new THREE.BoxGeometry(w*0.6,0.15,0.4),
-      new THREE.MeshStandardMaterial({color:0x546e7a}));
-    vent.position.set(0,h+0.08,0); g.add(vent);
+    const vent = new THREE.Mesh(GEO.box(w * 0.6, 0.15, 0.4), MAT.vent);
+    vent.position.set(0, h + 0.08, 0); g.add(vent);
     return g;
   },
-  // Clean room module
   cleanRoom(w, d, h, color) {
     const g = new THREE.Group();
-    const room = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
-      new THREE.MeshStandardMaterial({color:0xffffff, transparent:true, opacity:0.12}));
-    room.position.y=h/2; g.add(room);
+    const room = new THREE.Mesh(GEO.box(w, h, d),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.12 }));
+    room.position.y = h / 2; g.add(room);
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(room.geometry),
-      new THREE.LineBasicMaterial({color, transparent:true, opacity:0.8}));
+      new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 }));
     edges.position.copy(room.position); g.add(edges);
-    // HEPA units on top
-    for(let i=-w/3;i<=w/3;i+=w/3){
-      const hepa = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.15,0.6),
-        new THREE.MeshStandardMaterial({color:0x4dd0e1}));
-      hepa.position.set(i,h+0.08,0); g.add(hepa);
+    for (let i = -w / 3; i <= w / 3; i += w / 3) {
+      const hepa = new THREE.Mesh(GEO.box(0.6, 0.15, 0.6),
+        new THREE.MeshStandardMaterial({ color: 0x4dd0e1 }));
+      hepa.position.set(i, h + 0.08, 0); g.add(hepa);
     }
     return g;
   }
@@ -570,7 +585,7 @@ const zoneData = [
   {
     id:'surface', name:'SHARED: Surface Treatment', color:0xffa000,
     x:10, z:390, w:280, d:110, h:5,
-    desc:'★ Shot Blast → Zinc Plating → Powder Coating → Drying Oven', area:'3,500 sq ft', cost:'₹55L',
+    desc:'Shot Blast → Zinc Plating → Powder Coating → Drying Oven', area:'3,500 sq ft', cost:'₹55L',
     machines:[
       { name:'Shot Blasting Chamber', type:'booth', pos:[0.12,0.5], args:[2.0,2.0,2.0,0x78909c], cost:'₹12L' },
       { name:'Zinc Plating Tank Line', type:'tank', pos:[0.38,0.5], args:[3.0,1.5,1.0,0xffa000], cost:'₹15L' },
@@ -631,16 +646,20 @@ const zoneData = [
 ];
 
 // ═══════════ BUILD EVERYTHING ═══════════
+const labelCanvas = document.createElement('canvas');
+labelCanvas.width = 256; labelCanvas.height = 96;
+const labelCtx = labelCanvas.getContext('2d');
+
 zoneData.forEach(z => {
   const sx = tx(z.x), sz = tz(z.z), sw = tw(z.w), sd = tw(z.d);
-  const cx = sx + sw/2, cz = sz + sd/2;
+  const cx = sx + sw / 2, cz = sz + sd / 2;
   const col = new THREE.Color(z.color);
 
-  // Zone floor (slightly raised)
-  const floorGeo = new THREE.PlaneGeometry(sw - 0.1, sd - 0.1);
-  const floorMat = new THREE.MeshStandardMaterial({ color: z.color, transparent: true, opacity: 0.15, roughness: 0.8 });
+  // Zone floor
+  const floorGeo = GEO.plane(sw - 0.1, sd - 0.1);
+  const floorMat = MAT.get(z.color, { transparent: true, opacity: 0.15, roughness: 0.8 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.rotation.x = -Math.PI/2;
+  floor.rotation.x = -Math.PI / 2;
   floor.position.set(cx, 0.02, cz);
   floor.receiveShadow = true;
   floor.userData = { zone: z };
@@ -648,71 +667,72 @@ zoneData.forEach(z => {
   floorMeshes.push(floor);
   allZoneMeshes.push(floor);
 
-  // Zone boundary walls (low, transparent)
+  // Zone boundary walls
   const wallH = 0.3;
-  const wallMat = new THREE.MeshStandardMaterial({ color: z.color, transparent: true, opacity: 0.2, roughness: 0.5 });
-  [[sw,wallH,0.06, cx,wallH/2,sz],[sw,wallH,0.06, cx,wallH/2,sz+sd],
-   [0.06,wallH,sd, sx,wallH/2,cz],[0.06,wallH,sd, sx+sw,wallH/2,cz]].forEach(([w,h,d,px,py,pz]) => {
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), wallMat);
-    wall.position.set(px,py,pz); scene.add(wall);
+  const wallMat = MAT.get(z.color, { transparent: true, opacity: 0.2, roughness: 0.5 });
+  [[sw, wallH, 0.06, cx, wallH / 2, sz], [sw, wallH, 0.06, cx, wallH / 2, sz + sd],
+   [0.06, wallH, sd, sx, wallH / 2, cz], [0.06, wallH, sd, sx + sw, wallH / 2, cz]].forEach(([w, h, d, px, py, pz]) => {
+    const wall = new THREE.Mesh(GEO.box(w, h, d), wallMat);
+    wall.position.set(px, py, pz); scene.add(wall);
   });
 
   // Zone outline on ground
   const outlinePts = [
-    new THREE.Vector3(sx,0.03,sz), new THREE.Vector3(sx+sw,0.03,sz),
-    new THREE.Vector3(sx+sw,0.03,sz+sd), new THREE.Vector3(sx,0.03,sz+sd),
-    new THREE.Vector3(sx,0.03,sz)
+    new THREE.Vector3(sx, 0.03, sz), new THREE.Vector3(sx + sw, 0.03, sz),
+    new THREE.Vector3(sx + sw, 0.03, sz + sd), new THREE.Vector3(sx, 0.03, sz + sd),
+    new THREE.Vector3(sx, 0.03, sz)
   ];
   const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePts);
   const outlineMat = new THREE.LineBasicMaterial({ color: z.color, transparent: true, opacity: 0.5 });
   scene.add(new THREE.Line(outlineGeo, outlineMat));
 
   // Roof
-  const roofMat2 = new THREE.MeshStandardMaterial({ color: 0x1a2840, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
-  const roofMesh = new THREE.Mesh(new THREE.PlaneGeometry(sw, sd), roofMat2);
-  roofMesh.rotation.x = -Math.PI/2;
+  const roofMesh = new THREE.Mesh(GEO.plane(sw, sd),
+    new THREE.MeshStandardMaterial({ color: 0x1a2840, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
+  roofMesh.rotation.x = -Math.PI / 2;
   roofMesh.position.set(cx, z.h * 0.5 + 0.5, cz);
   roofMesh.visible = false;
   scene.add(roofMesh);
   roofMeshes.push(roofMesh);
 
-  // ─── PLACE MACHINES ───
+  // Place machines
   z.machines.forEach(m => {
     const mx = sx + m.pos[0] * sw;
     const mz = sz + m.pos[1] * sd;
     let obj;
     try {
       obj = MCH[m.type](...m.args);
-    } catch(e) { return; }
+    } catch (e) {
+      console.warn(`Failed to build machine "${m.name}" (${m.type}):`, e.message);
+      return;
+    }
     obj.position.set(mx, 0, mz);
     if (m.rot !== undefined) obj.rotation.y = m.rot;
     obj.userData = { machine: m, zone: z };
-    obj.traverse(child => { if(child.isMesh) { child.userData = { machine: m, zone: z }; }});
+    obj.traverse(child => { if (child.isMesh) { child.userData = { machine: m, zone: z }; } });
     scene.add(obj);
     allMachineMeshes.push(obj);
   });
 
-  // Label sprite
-  const canvas = document.createElement('canvas');
-  canvas.width = 256; canvas.height = 96;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'rgba(13,21,37,0.85)';
-  ctx.roundRect(4,4,248,88,6); ctx.fill();
-  ctx.strokeStyle = `#${col.getHexString()}`; ctx.lineWidth = 2;
-  ctx.roundRect(4,4,248,88,6); ctx.stroke();
-  ctx.fillStyle = `#${col.getHexString()}`;
-  ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
+  // Label sprite (reuse single canvas)
+  labelCtx.clearRect(0, 0, 256, 96);
+  labelCtx.fillStyle = 'rgba(13,21,37,0.85)';
+  labelCtx.roundRect(4, 4, 248, 88, 6); labelCtx.fill();
+  labelCtx.strokeStyle = `#${col.getHexString()}`; labelCtx.lineWidth = 2;
+  labelCtx.roundRect(4, 4, 248, 88, 6); labelCtx.stroke();
+  labelCtx.fillStyle = `#${col.getHexString()}`;
+  labelCtx.font = 'bold 14px monospace'; labelCtx.textAlign = 'center';
   const nameLines = z.name.split(':');
-  if(nameLines.length > 1){
-    ctx.fillText(nameLines[0].trim(), 128, 32);
-    ctx.font = '11px monospace'; ctx.fillText(nameLines[1].trim().substring(0,28), 128, 50);
+  if (nameLines.length > 1) {
+    labelCtx.fillText(nameLines[0].trim(), 128, 32);
+    labelCtx.font = '11px monospace'; labelCtx.fillText(nameLines[1].trim().substring(0, 28), 128, 50);
   } else {
-    ctx.fillText(z.name.substring(0,24), 128, 38);
+    labelCtx.fillText(z.name.substring(0, 24), 128, 38);
   }
-  ctx.fillStyle = '#66bb6a'; ctx.font = '12px monospace';
-  ctx.fillText(z.cost, 128, 72);
+  labelCtx.fillStyle = '#66bb6a'; labelCtx.font = '12px monospace';
+  labelCtx.fillText(z.cost, 128, 72);
 
-  const tex = new THREE.CanvasTexture(canvas);
+  const tex = new THREE.CanvasTexture(labelCanvas);
   tex.minFilter = THREE.LinearFilter;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
   const lblScale = Math.max(4, sw * 1.2);
@@ -730,23 +750,23 @@ function flowArrow(points, color) {
     new THREE.BufferGeometry().setFromPoints(pts),
     new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.45 })
   ));
-  const last = pts[pts.length-1], prev = pts[pts.length-3];
+  const last = pts[pts.length - 1], prev = pts[pts.length - 3];
   const d = new THREE.Vector3().subVectors(last, prev).normalize();
-  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.3,0.8,4),
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.8, 4),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6 }));
   arrow.position.copy(last); arrow.position.y = 0.15;
-  arrow.lookAt(last.clone().add(d)); arrow.rotateX(Math.PI/2);
+  arrow.lookAt(last.clone().add(d)); arrow.rotateX(Math.PI / 2);
   scene.add(arrow);
 }
-flowArrow([new THREE.Vector3(-24,0.1,-16), new THREE.Vector3(-24,0.1,-8), new THREE.Vector3(-18,0.1,-4)], 0x64b5f6);
-flowArrow([new THREE.Vector3(-5,0.1,3), new THREE.Vector3(-12,0.1,6), new THREE.Vector3(-18,0.1,7)], 0xffa726);
-flowArrow([new THREE.Vector3(-8,0.1,11), new THREE.Vector3(12,0.1,10), new THREE.Vector3(24,0.1,8)], 0xef5350);
+flowArrow([new THREE.Vector3(-24, 0.1, -16), new THREE.Vector3(-24, 0.1, -8), new THREE.Vector3(-18, 0.1, -4)], 0x64b5f6);
+flowArrow([new THREE.Vector3(-5, 0.1, 3), new THREE.Vector3(-12, 0.1, 6), new THREE.Vector3(-18, 0.1, 7)], 0xffa726);
+flowArrow([new THREE.Vector3(-8, 0.1, 11), new THREE.Vector3(12, 0.1, 10), new THREE.Vector3(24, 0.1, 8)], 0xef5350);
 
 // ═══════════ CAMERA CONTROLS ═══════════
-let isDragging = false, prevMouse = {x:0,y:0};
-let sph = { r:85, t:Math.PI/4, p:Math.PI/3 };
+let isDragging = false, prevMouse = { x: 0, y: 0 };
+let sph = { r: 85, t: Math.PI / 4, p: Math.PI / 3 };
 let tSph = { ...sph };
-let target = new THREE.Vector3(0,0,0);
+let target = new THREE.Vector3(0, 0, 0);
 let tTarget = target.clone();
 
 function updateCam() {
@@ -762,56 +782,96 @@ function updateCam() {
   camera.lookAt(target);
 }
 
-renderer.domElement.addEventListener('mousedown', e => { isDragging=true; prevMouse={x:e.clientX,y:e.clientY}; });
+renderer.domElement.addEventListener('mousedown', e => { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY }; });
 renderer.domElement.addEventListener('mousemove', e => {
-  if(!isDragging) return;
+  if (!isDragging) return;
   tSph.t -= (e.clientX - prevMouse.x) * 0.005;
-  tSph.p = Math.max(0.15, Math.min(Math.PI/2.1, tSph.p + (e.clientY - prevMouse.y) * 0.005));
-  prevMouse = {x:e.clientX, y:e.clientY};
+  tSph.p = Math.max(0.15, Math.min(Math.PI / 2.1, tSph.p + (e.clientY - prevMouse.y) * 0.005));
+  prevMouse = { x: e.clientX, y: e.clientY };
 });
-renderer.domElement.addEventListener('mouseup', () => isDragging=false);
-renderer.domElement.addEventListener('mouseleave', () => isDragging=false);
-renderer.domElement.addEventListener('wheel', e => { tSph.r = Math.max(15, Math.min(150, tSph.r + e.deltaY*0.05)); });
+renderer.domElement.addEventListener('mouseup', () => isDragging = false);
+renderer.domElement.addEventListener('mouseleave', () => isDragging = false);
+renderer.domElement.addEventListener('wheel', e => {
+  tSph.r = Math.max(15, Math.min(150, tSph.r + e.deltaY * 0.05));
+}, { passive: true });
 
-// Touch
-renderer.domElement.addEventListener('touchstart', e => { if(e.touches.length===1){ isDragging=true; prevMouse={x:e.touches[0].clientX,y:e.touches[0].clientY}; }});
+// Touch: drag + pinch-to-zoom
+let lastPinchDist = 0;
+renderer.domElement.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    isDragging = true;
+    prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  } else if (e.touches.length === 2) {
+    isDragging = false;
+    lastPinchDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+  }
+});
 renderer.domElement.addEventListener('touchmove', e => {
-  if(!isDragging||e.touches.length!==1) return;
-  tSph.t -= (e.touches[0].clientX - prevMouse.x)*0.005;
-  tSph.p = Math.max(0.15, Math.min(Math.PI/2.1, tSph.p + (e.touches[0].clientY - prevMouse.y)*0.005));
-  prevMouse = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+  if (e.touches.length === 2) {
+    const dist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    const delta = lastPinchDist - dist;
+    tSph.r = Math.max(15, Math.min(150, tSph.r + delta * 0.15));
+    lastPinchDist = dist;
+    e.preventDefault();
+    return;
+  }
+  if (!isDragging || e.touches.length !== 1) return;
+  tSph.t -= (e.touches[0].clientX - prevMouse.x) * 0.005;
+  tSph.p = Math.max(0.15, Math.min(Math.PI / 2.1, tSph.p + (e.touches[0].clientY - prevMouse.y) * 0.005));
+  prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   e.preventDefault();
-}, {passive:false});
-renderer.domElement.addEventListener('touchend', () => isDragging=false);
+}, { passive: false });
+renderer.domElement.addEventListener('touchend', () => { isDragging = false; lastPinchDist = 0; });
+
+// ═══════════ KEYBOARD CONTROLS ═══════════
+document.addEventListener('keydown', e => {
+  switch (e.key) {
+    case 'ArrowLeft': tSph.t += 0.08; break;
+    case 'ArrowRight': tSph.t -= 0.08; break;
+    case 'ArrowUp': tSph.p = Math.max(0.15, tSph.p - 0.05); break;
+    case 'ArrowDown': tSph.p = Math.min(Math.PI / 2.1, tSph.p + 0.05); break;
+    case '+': case '=': tSph.r = Math.max(15, tSph.r - 3); break;
+    case '-': case '_': tSph.r = Math.min(150, tSph.r + 3); break;
+    case 'Escape': closeInfo(); break;
+    case '1': setCameraView('perspective'); break;
+    case '2': setCameraView('top'); break;
+    case '3': setCameraView('front'); break;
+    case '4': setCameraView('side'); break;
+  }
+});
 
 // ═══════════ CLICK DETECTION ═══════════
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
 renderer.domElement.addEventListener('click', e => {
-  mouse.x = (e.clientX/innerWidth)*2-1;
-  mouse.y = -(e.clientY/innerHeight)*2+1;
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
 
-  // Check machine meshes first
   const allClickable = [];
-  allMachineMeshes.forEach(grp => { grp.traverse(c => { if(c.isMesh) allClickable.push(c); }); });
+  allMachineMeshes.forEach(grp => { grp.traverse(c => { if (c.isMesh) allClickable.push(c); }); });
   floorMeshes.forEach(f => allClickable.push(f));
 
   const hits = raycaster.intersectObjects(allClickable);
-  if(hits.length > 0) {
+  if (hits.length > 0) {
     const ud = hits[0].object.userData;
-    if(ud.zone) showInfo(ud.zone, ud.machine);
+    if (ud.zone) showInfo(ud.zone, ud.machine);
   }
 });
 
 function showInfo(zone, machine) {
   document.getElementById('infoTitle').textContent = zone.name;
   document.getElementById('infoDesc').textContent = zone.desc;
-  document.getElementById('infoArea').textContent = '📐 ' + zone.area;
+  document.getElementById('infoArea').textContent = 'Area: ' + zone.area;
   document.getElementById('infoCost').textContent = 'Zone Cost: ' + zone.cost;
 
-  // Machine list
   const ml = document.getElementById('machineList');
   ml.innerHTML = '<h3 style="font-size:10px;margin-top:4px">Machines in Zone</h3>';
   zone.machines.forEach(m => {
@@ -819,7 +879,7 @@ function showInfo(zone, machine) {
     item.className = 'machine-item';
     const highlight = (machine && m.name === machine.name) ? 'color:#64b5f6;font-weight:700' : '';
     item.innerHTML = `
-      <div class="machine-dot" style="background:${machine && m.name===machine.name ? '#64b5f6' : '#3a5a7f'}"></div>
+      <div class="machine-dot" style="background:${machine && m.name === machine.name ? '#64b5f6' : '#3a5a7f'}"></div>
       <span class="machine-name" style="${highlight}">${m.name}</span>
       <span class="machine-cost-tag">${m.cost}</span>
     `;
@@ -832,52 +892,62 @@ function showInfo(zone, machine) {
 function closeInfo() { document.getElementById('infoPanel').classList.remove('show'); }
 
 // ═══════════ CONTROLS ═══════════
-function setCameraView(v) {
-  document.querySelectorAll('.ctrl-btn').forEach(b=>b.classList.remove('active'));
-  if(event && event.target) event.target.classList.add('active');
+function setCameraView(v, e) {
+  document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+  if (e && e.target) e.target.classList.add('active');
   closeInfo();
-  switch(v){
-    case 'perspective': tSph={r:85,t:Math.PI/4,p:Math.PI/3}; tTarget=new THREE.Vector3(0,0,0); break;
-    case 'top': tSph={r:65,t:0.01,p:0.05}; tTarget=new THREE.Vector3(0,0,0); break;
-    case 'front': tSph={r:55,t:0,p:Math.PI/2.5}; tTarget=new THREE.Vector3(0,0,0); break;
-    case 'side': tSph={r:55,t:Math.PI/2,p:Math.PI/2.5}; tTarget=new THREE.Vector3(0,0,0); break;
+  switch (v) {
+    case 'perspective': tSph = { r: 85, t: Math.PI / 4, p: Math.PI / 3 }; tTarget = new THREE.Vector3(0, 0, 0); break;
+    case 'top': tSph = { r: 65, t: 0.01, p: 0.05 }; tTarget = new THREE.Vector3(0, 0, 0); break;
+    case 'front': tSph = { r: 55, t: 0, p: Math.PI / 2.5 }; tTarget = new THREE.Vector3(0, 0, 0); break;
+    case 'side': tSph = { r: 55, t: Math.PI / 2, p: Math.PI / 2.5 }; tTarget = new THREE.Vector3(0, 0, 0); break;
   }
 }
 
-function toggleLabels() { showLabelsFlag=!showLabelsFlag; labelSprites.forEach(s=>s.visible=showLabelsFlag); }
-function toggleRoof() { roofVisible=!roofVisible; roofMeshes.forEach(r=>r.visible=roofVisible); }
-function toggleFloor() { floorVisible=!floorVisible; floorMeshes.forEach(f=>f.visible=floorVisible); }
+function toggleLabels() { showLabelsFlag = !showLabelsFlag; labelSprites.forEach(s => s.visible = showLabelsFlag); }
+function toggleRoof() { roofVisible = !roofVisible; roofMeshes.forEach(r => r.visible = roofVisible); }
+function toggleFloor() { floorVisible = !floorVisible; floorMeshes.forEach(f => f.visible = floorVisible); }
 
 // ═══════════ TOUR ═══════════
-let touring=false, tourProg=0;
+let touring = false, tourProg = 0;
 const tourStops = [
-  {r:85,t:Math.PI/4,p:Math.PI/3,tgt:[0,0,0]},
-  {r:30,t:-Math.PI/3,p:Math.PI/3.5,tgt:[-22,0,-8]},
-  {r:25,t:Math.PI/6,p:Math.PI/3.5,tgt:[-18,0,-2]},
-  {r:25,t:0,p:Math.PI/4,tgt:[5,0,-3]},
-  {r:25,t:Math.PI/3,p:Math.PI/3,tgt:[8,0,0]},
-  {r:30,t:Math.PI/2.5,p:Math.PI/3.5,tgt:[20,0,-2]},
-  {r:30,t:Math.PI/1.8,p:Math.PI/3.5,tgt:[20,0,4]},
-  {r:30,t:-Math.PI/4,p:Math.PI/3,tgt:[5,0,8]},
-  {r:25,t:-Math.PI/2.5,p:Math.PI/3.5,tgt:[-18,0,8]},
-  {r:25,t:-Math.PI/2,p:Math.PI/3.5,tgt:[-24,0,13]},
-  {r:85,t:Math.PI/4,p:Math.PI/3,tgt:[0,0,0]},
+  { r: 85, t: Math.PI / 4, p: Math.PI / 3, tgt: [0, 0, 0] },
+  { r: 30, t: -Math.PI / 3, p: Math.PI / 3.5, tgt: [-22, 0, -8] },
+  { r: 25, t: Math.PI / 6, p: Math.PI / 3.5, tgt: [-18, 0, -2] },
+  { r: 25, t: 0, p: Math.PI / 4, tgt: [5, 0, -3] },
+  { r: 25, t: Math.PI / 3, p: Math.PI / 3, tgt: [8, 0, 0] },
+  { r: 30, t: Math.PI / 2.5, p: Math.PI / 3.5, tgt: [20, 0, -2] },
+  { r: 30, t: Math.PI / 1.8, p: Math.PI / 3.5, tgt: [20, 0, 4] },
+  { r: 30, t: -Math.PI / 4, p: Math.PI / 3, tgt: [5, 0, 8] },
+  { r: 25, t: -Math.PI / 2.5, p: Math.PI / 3.5, tgt: [-18, 0, 8] },
+  { r: 25, t: -Math.PI / 2, p: Math.PI / 3.5, tgt: [-24, 0, 13] },
+  { r: 85, t: Math.PI / 4, p: Math.PI / 3, tgt: [0, 0, 0] },
 ];
 
-function animateTour() { if(touring){touring=false;return;} touring=true; tourProg=0; }
+function animateTour() { if (touring) { touring = false; return; } touring = true; tourProg = 0; }
 
 // ═══════════ ANIMATE ═══════════
+let firstFrame = true;
 function animate() {
   requestAnimationFrame(animate);
-  if(touring) {
+
+  // Dismiss loading screen after first render
+  if (firstFrame) {
+    firstFrame = false;
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.classList.add('fade-out');
+    setTimeout(() => overlay.remove(), 600);
+  }
+
+  if (touring) {
     tourProg += 0.0008;
-    if(tourProg >= tourStops.length-1) { touring=false; tourProg=0; }
+    if (tourProg >= tourStops.length - 1) { touring = false; tourProg = 0; }
     else {
-      const i=Math.floor(tourProg), t=tourProg-i;
-      const s=t*t*(3-2*t);
-      const a=tourStops[i], b=tourStops[i+1];
-      tSph.r=a.r+(b.r-a.r)*s; tSph.t=a.t+(b.t-a.t)*s; tSph.p=a.p+(b.p-a.p)*s;
-      tTarget.set(a.tgt[0]+(b.tgt[0]-a.tgt[0])*s, a.tgt[1]+(b.tgt[1]-a.tgt[1])*s, a.tgt[2]+(b.tgt[2]-a.tgt[2])*s);
+      const i = Math.floor(tourProg), t = tourProg - i;
+      const s = t * t * (3 - 2 * t);
+      const a = tourStops[i], b = tourStops[i + 1];
+      tSph.r = a.r + (b.r - a.r) * s; tSph.t = a.t + (b.t - a.t) * s; tSph.p = a.p + (b.p - a.p) * s;
+      tTarget.set(a.tgt[0] + (b.tgt[0] - a.tgt[0]) * s, a.tgt[1] + (b.tgt[1] - a.tgt[1]) * s, a.tgt[2] + (b.tgt[2] - a.tgt[2]) * s);
     }
   }
   updateCam();
@@ -886,9 +956,9 @@ function animate() {
 animate();
 
 window.addEventListener('resize', () => {
-  camera.aspect = innerWidth/innerHeight;
+  camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
 </script>
 </body>
